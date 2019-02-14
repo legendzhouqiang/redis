@@ -28,6 +28,11 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+/**
+ *@author zhouqiangpeng
+ * 内存分配
+ */
+
 #ifndef __ZMALLOC_H
 #define __ZMALLOC_H
 

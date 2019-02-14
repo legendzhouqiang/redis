@@ -30,6 +30,11 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+/**
+ * 动态字符串
+ *
+ */
+
 #ifndef __SDS_H
 #define __SDS_H
 

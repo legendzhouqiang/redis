@@ -28,15 +28,20 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+/**
+ * 双端链表
+ *
+ */
+
 #ifndef __ADLIST_H__
 #define __ADLIST_H__
 
 /* Node, List, and Iterator are the only data structures used currently. */
 
 typedef struct listNode {
-    struct listNode *prev;
-    struct listNode *next;
-    void *value;
+    struct listNode *prev;  //前驱指针
+    struct listNode *next;  //后继指针
+    void *value;   //万能指针，能够存放任何信息
 } listNode;
 
 typedef struct listIter {
@@ -44,9 +49,13 @@ typedef struct listIter {
     int direction;
 } listIter;
 
+
+/**
+ * 链表定义
+ */
 typedef struct list {
-    listNode *head;
-    listNode *tail;
+    listNode *head;   //链表头结点
+    listNode *tail;   //链表尾节点
     void *(*dup)(void *ptr);
     void (*free)(void *ptr);
     int (*match)(void *ptr, void *key);
