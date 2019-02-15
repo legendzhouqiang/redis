@@ -26,6 +26,20 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+/*********************************************************************************************************
+ *
+ *
+ *
+ * 客户端的创建与释放
+ * 命令接收与命令回复
+ * Redis通信协议分析
+ * CLIENT 命令的实现
+ *
+ *
+ * @param errstr
+ * @param c
+ *********************************************************************************************************/
+
 
 #include "server.h"
 #include "atomicvar.h"
@@ -82,6 +96,14 @@ void linkClient(client *c) {
     raxInsert(server.clients_index,(unsigned char*)&id,sizeof(id),c,NULL);
 }
 
+/**************************************************
+ *
+ * 创建客户端
+ *
+ *
+ * @param fd
+ * @return
+ */
 client *createClient(int fd) {
     client *c = zmalloc(sizeof(client));
 
@@ -849,6 +871,15 @@ static void acceptCommonHandler(int fd, int flags, char *ip) {
     c->flags |= flags;
 }
 
+/**********************************************************************
+ *
+ * 创建tcp连接处理程序
+ *
+ * @param el
+ * @param fd
+ * @param privdata
+ * @param mask
+ ***************************************************************************/
 void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
     int cport, cfd, max = MAX_ACCEPTS_PER_CALL;
     char cip[NET_IP_STR_LEN];
@@ -869,6 +900,15 @@ void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
     }
 }
 
+/*********************************************************************
+ *
+ * 创建本地连接处理程序
+ *
+ * @param el    事件循环
+ * @param fd    事件描述符
+ * @param privdata  事件数据
+ * @param mask   事件类型
+ */
 void acceptUnixHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
     int cfd, max = MAX_ACCEPTS_PER_CALL;
     UNUSED(el);
@@ -887,6 +927,7 @@ void acceptUnixHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
         acceptCommonHandler(cfd,CLIENT_UNIX_SOCKET,NULL);
     }
 }
+
 
 static void freeClientArgv(client *c) {
     int j;
@@ -952,6 +993,11 @@ void unlinkClient(client *c) {
     }
 }
 
+/***********************************************************
+ * 释放客户端
+ *
+ * @param c
+ ***********************************************************/
 void freeClient(client *c) {
     listNode *ln;
 
@@ -1055,7 +1101,15 @@ void freeClient(client *c) {
 /* Schedule a client to free it at a safe time in the serverCron() function.
  * This function is useful when we need to terminate a client but we are in
  * a context where calling freeClient() is not possible, because the client
- * should be valid for the continuation of the flow of the program. */
+ * should be valid for the continuation of the flow of the program.
+ * */
+
+/*****************************************************************
+ *
+ * 异步释放客户端连接
+ *
+ * @param c
+ ******************************************************************/
 void freeClientAsync(client *c) {
     if (c->flags & CLIENT_CLOSE_ASAP || c->flags & CLIENT_LUA) return;
     c->flags |= CLIENT_CLOSE_ASAP;
@@ -1390,6 +1444,17 @@ static void setProtocolError(const char *errstr, client *c) {
  * This function is called if processInputBuffer() detects that the next
  * command is in RESP format, so the first byte in the command is found
  * to be '*'. Otherwise for inline commands processInlineBuffer() is called. */
+
+/**************************************************************
+ *
+ * 根据reqtype来判断和设置请求的类型,
+ * 因为Redis服务器支持Telnet的连接，因此Telnet命令请求协议类型是PROTO_REQ_INLINE，
+ * 进而调用processInlineBuffer()函数处理，
+ * 而redis-cli命令请求的协议类型是PROTO_REQ_MULTIBULK，进而调用processMultibulkBuffer()函数来处理
+ *
+ * @param c
+ * @return
+ **************************************************************/
 int processMultibulkBuffer(client *c) {
     char *newline = NULL;
     int ok;
@@ -1623,6 +1688,21 @@ void processInputBufferAndReplicate(client *c) {
     }
 }
 
+
+
+/**************************************************************************
+ *
+ *
+ * 从文件描述符fd中读出数据到输入缓冲区querybuf中，
+ * 并更新输入缓冲区的峰值querybuf_peak，而且会检查读的长度，
+ * 如果大于了server.client_max_querybuf_len则会退出，
+ * 而这个阀值在服务器初始化为PROTO_MAX_QUERYBUF_LEN (1024*1024*1024)也就是1G大小
+ *
+ * @param el
+ * @param fd
+ * @param privdata
+ * @param mask
+ **************************************************************************/
 void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
     client *c = (client*) privdata;
     int nread, readlen;
@@ -1694,6 +1774,7 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
      * the sub-slaves and to the replication backlog. */
     processInputBufferAndReplicate(c);
 }
+
 
 void getClientsMaxBuffers(unsigned long *longest_output_list,
                           unsigned long *biggest_input_buffer) {

@@ -28,6 +28,12 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+/**
+ *
+ * 双向链表实现
+ *
+ */
+
 
 #include <stdlib.h>
 #include "adlist.h"
@@ -72,19 +78,23 @@ void listEmpty(list *list)
 
 /* Free the whole list.
  *
- * This function can't fail. */
+ * This function can't fail.
+ *
+ */
 void listRelease(list *list)
 {
     listEmpty(list);
     zfree(list);
 }
 
-/* Add a new node to the list, to head, containing the specified 'value'
+/*
+ * Add a new node to the list, to head, containing the specified 'value'
  * pointer as value.
  *
  * On error, NULL is returned and no operation is performed (i.e. the
  * list remains unaltered).
- * On success the 'list' pointer you pass to the function is returned. */
+ * On success the 'list' pointer you pass to the function is returned.
+ */
 list *listAddNodeHead(list *list, void *value)
 {
     listNode *node;
@@ -131,6 +141,15 @@ list *listAddNodeTail(list *list, void *value)
     return list;
 }
 
+
+/**
+ * 更具after 在old_node前或者后插入一个节点
+ * @param list   链表
+ * @param old_node  目标节点
+ * @param value     带插入节点值
+ * @param after     在节点前还是节点后
+ * @return         返回原来的链表
+ */
 list *listInsertNode(list *list, listNode *old_node, void *value, int after) {
     listNode *node;
 
@@ -163,7 +182,14 @@ list *listInsertNode(list *list, listNode *old_node, void *value, int after) {
 /* Remove the specified node from the specified list.
  * It's up to the caller to free the private value of the node.
  *
- * This function can't fail. */
+ * This function can't fail.
+ *
+ */
+/**
+ * 链表中删除节点node
+ * @param list  待操作链表
+ * @param node  待删除节点
+ */
 void listDelNode(list *list, listNode *node)
 {
     if (node->prev)
@@ -183,6 +209,12 @@ void listDelNode(list *list, listNode *node)
  * call to listNext() will return the next element of the list.
  *
  * This function can't fail. */
+/**
+ * 获取链表的迭代器
+ * @param list  待操作链表
+ * @param direction 方向  AL_START_HEAD 从头到尾   AL_START_TAIL 从尾到头
+ * @return
+ */
 listIter *listGetIterator(list *list, int direction)
 {
     listIter *iter;
@@ -197,6 +229,10 @@ listIter *listGetIterator(list *list, int direction)
 }
 
 /* Release the iterator memory */
+/**
+ * 释放迭代器
+ * @param iter
+ */
 void listReleaseIterator(listIter *iter) {
     zfree(iter);
 }
@@ -226,6 +262,11 @@ void listRewindTail(list *list, listIter *li) {
  * }
  *
  * */
+/**
+ * 获取迭代器的下一个节点
+ * @param iter
+ * @return
+ */
 listNode *listNext(listIter *iter)
 {
     listNode *current = iter->next;

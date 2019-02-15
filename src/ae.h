@@ -30,6 +30,22 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+/**
+ * redis 事件
+ *
+ * 所谓事件驱动，就是当你输入一条命令并且按下回车，然后消息被组装成Redis协议的格式发送给Redis服务器，这就会产生一个事件，
+ * Redis服务器会接收该命令，处理该命令和发送回复，而当你没有与服务器进行交互时，那么服务器就会处于阻塞等待状态，
+ * 会让出CPU从而进入睡眠状态，当事件触发时，就会被操作系统唤醒。事件驱动使CPU更高效的利用。
+ *
+ *
+ *
+ * 在redis服务器中，处理了两类事件：
+ *
+ * 文件事件（file event）：Redis服务器通过套接字于客户端（或其他Redis服务器）进行连接，而文件事件就是服务器对套接字操作的抽象。
+ * 时间事件（time event）：Redis服务器的一些操作需要在给定的事件点执行，而时间事件就是服务器对这类定时操作的抽象。
+ *
+ */
+
 #ifndef __AE_H__
 #define __AE_H__
 
@@ -67,66 +83,162 @@ typedef int aeTimeProc(struct aeEventLoop *eventLoop, long long id, void *client
 typedef void aeEventFinalizerProc(struct aeEventLoop *eventLoop, void *clientData);
 typedef void aeBeforeSleepProc(struct aeEventLoop *eventLoop);
 
-/* File event structure */
+/* File event structure
+ *
+ *  文件事件（file event）：Redis服务器通过套接字于客户端（或其他Redis服务器）进行连接，
+ *  而文件事件就是服务器对套接字操作的抽象。
+ */
 typedef struct aeFileEvent {
     int mask; /* one of AE_(READABLE|WRITABLE|BARRIER) */
+
+    //可读处理函数
     aeFileProc *rfileProc;
+
+    //可写处理函数
     aeFileProc *wfileProc;
+
+    //客户端传入的数据
     void *clientData;
 } aeFileEvent;
 
-/* Time event structure */
+/* Time event structure
+ *
+ *时间事件（time event）：Redis服务器的一些操作需要在给定的事件点执行，
+ * 而时间事件就是服务器对这类定时操作的抽象
+ *
+ */
 typedef struct aeTimeEvent {
+    //事件事件id
     long long id; /* time event identifier. */
+
+    // 时间事件到达的时间的秒数
     long when_sec; /* seconds */
+
+    // 时间事件到达的时间的毫秒数
     long when_ms; /* milliseconds */
+
+    // 时间事件处理函数
     aeTimeProc *timeProc;
+
+    // 时间事件终结函数
     aeEventFinalizerProc *finalizerProc;
+
+    // 客户端传入的数据
     void *clientData;
+
+    // 指向上一个时间事件
     struct aeTimeEvent *prev;
+    // 指向下一个时间事件
     struct aeTimeEvent *next;
 } aeTimeEvent;
 
+
 /* A fired event */
 typedef struct aeFiredEvent {
+    //就绪事件描述符
     int fd;
+    //就绪事件类型
     int mask;
 } aeFiredEvent;
 
-/* State of an event based program */
+
+
+/* State of an event based program
+ *
+ * 事件状态
+ * */
 typedef struct aeEventLoop {
-    int maxfd;   /* highest file descriptor currently registered */
+    //当前已注册的最大的文件描述符
+    int maxfd;
+
+    //文件描述符监听集合大小
     int setsize; /* max number of file descriptors tracked */
+
+    //下一个事件id
     long long timeEventNextId;
+
+    //最后一次事件执行时间
     time_t lastTime;     /* Used to detect system clock skew */
+
+    //注册的文件事件
     aeFileEvent *events; /* Registered events */
+
+    //就绪文件事件
     aeFiredEvent *fired; /* Fired events */
+
+    // 时间事件的头节点指针
     aeTimeEvent *timeEventHead;
+
+    // 事件处理开关
     int stop;
+
+    // 多路复用库的事件状态数据
     void *apidata; /* This is used for polling API specific data */
+
+    // 执行处理事件之前的函数
     aeBeforeSleepProc *beforesleep;
+
+    // 执行处理事件之后的函数
     aeBeforeSleepProc *aftersleep;
 } aeEventLoop;
 
 /* Prototypes */
 aeEventLoop *aeCreateEventLoop(int setsize);
+
 void aeDeleteEventLoop(aeEventLoop *eventLoop);
+
+
 void aeStop(aeEventLoop *eventLoop);
+
+
 int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
         aeFileProc *proc, void *clientData);
+
+
 void aeDeleteFileEvent(aeEventLoop *eventLoop, int fd, int mask);
+
+
 int aeGetFileEvents(aeEventLoop *eventLoop, int fd);
+
+
+/*
+ * 创建时间事件
+ * 返回时间事件的id
+ */
 long long aeCreateTimeEvent(aeEventLoop *eventLoop, long long milliseconds,
         aeTimeProc *proc, void *clientData,
         aeEventFinalizerProc *finalizerProc);
+
+/**
+ * 删除给定id的时间事件
+ * @param eventLoop
+ * @param id
+ * @return
+ */
 int aeDeleteTimeEvent(aeEventLoop *eventLoop, long long id);
+
+
 int aeProcessEvents(aeEventLoop *eventLoop, int flags);
+
+
 int aeWait(int fd, int mask, long long milliseconds);
+
+
 void aeMain(aeEventLoop *eventLoop);
+
+
 char *aeGetApiName(void);
+
+
 void aeSetBeforeSleepProc(aeEventLoop *eventLoop, aeBeforeSleepProc *beforesleep);
+
+
 void aeSetAfterSleepProc(aeEventLoop *eventLoop, aeBeforeSleepProc *aftersleep);
+
+
 int aeGetSetSize(aeEventLoop *eventLoop);
+
+
 int aeResizeSetSize(aeEventLoop *eventLoop, int setsize);
 
 #endif

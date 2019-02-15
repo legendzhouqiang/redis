@@ -60,6 +60,14 @@
     #endif
 #endif
 
+/*****************************************************************************
+ * 函 数 名  : aeCreateEventLoop
+ * 函数功能  : 构建aeEventLoop对象eventLoop
+ * 输入参数  : int setsize  消息队列大小
+ * 输出参数  : 无
+ * 返 回 值  : aeEventLoop
+ * 调用关系  :
+*****************************************************************************/
 aeEventLoop *aeCreateEventLoop(int setsize) {
     aeEventLoop *eventLoop;
     int i;
@@ -122,6 +130,10 @@ int aeResizeSetSize(aeEventLoop *eventLoop, int setsize) {
     return AE_OK;
 }
 
+/**
+ * s删除事件循环中的事件
+ * @param eventLoop
+ */
 void aeDeleteEventLoop(aeEventLoop *eventLoop) {
     aeApiFree(eventLoop);
     zfree(eventLoop->events);
@@ -129,10 +141,31 @@ void aeDeleteEventLoop(aeEventLoop *eventLoop) {
     zfree(eventLoop);
 }
 
+/**
+ * 停止事件轮训
+ * @param eventLoop
+ */
 void aeStop(aeEventLoop *eventLoop) {
     eventLoop->stop = 1;
 }
 
+
+/*****************************************************************************
+ * 函 数 名  : aeCreateFileEvent
+ * 函数功能  : 建立事件监听对象
+ * 输入参数  : aeEventLoop *eventLoop  事件监听服务描述符对象指针
+               int fd                  被监听文件描述符
+               int mask                监听事件掩码
+               aeFileProc *proc        事件响应函数
+               void *clientData        参数
+ * 输出参数  : 无
+ * 返 回 值  :
+ * 调用关系  :
+ * 记    录
+ * 1.日    期: 2018年03月06日
+ *   作    者: zyz
+ *   修改内容: 新生成函数
+*****************************************************************************/
 int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
         aeFileProc *proc, void *clientData)
 {
@@ -153,6 +186,16 @@ int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
     return AE_OK;
 }
 
+/***************************************************************
+ *
+ *I/O多路复用程序取消对给定套接字的给定事件的监听，并取消事件和事件处理器之间的关联
+ *
+ * @param eventLoop  事件循环
+ * @param fd   待取消的事件套接字
+ * @param mask  事件类型
+ *
+ *
+ ****************************************************************/
 void aeDeleteFileEvent(aeEventLoop *eventLoop, int fd, int mask)
 {
     if (fd >= eventLoop->setsize) return;
@@ -175,12 +218,26 @@ void aeDeleteFileEvent(aeEventLoop *eventLoop, int fd, int mask)
     }
 }
 
+/*************************************************************
+ *
+ * 函数接受一个套接字描述符，返回该套接字正在被监听的事件类型：
+ *
+ * 如果套接字没有任何事件被监听，那么函数返回AE_NONE;
+ * 如果套接字的读事件正在被监听，那么函数返回AE_READABLE;
+ * 如果套接字的写事件正在被监听，那么函数返回AE_WRITABLE;
+ * 如果套接字的读事件和写事件正在被监听，那么函数返回AE_READABLE|AE_WRITABLE
+ *
+ * @param eventLoop   事件循环
+ * @param fd          事件描述符
+ * @return            返回事件类型
+ */
 int aeGetFileEvents(aeEventLoop *eventLoop, int fd) {
     if (fd >= eventLoop->setsize) return 0;
     aeFileEvent *fe = &eventLoop->events[fd];
 
     return fe->mask;
 }
+
 
 static void aeGetTime(long *seconds, long *milliseconds)
 {
@@ -205,6 +262,16 @@ static void aeAddMillisecondsToNow(long long milliseconds, long *sec, long *ms) 
     *ms = when_ms;
 }
 
+/**
+ * ae的定时器是用一个单链表来管理的，将定时器依次从head插入到单链表中。插入的过程中会取得未来的墙上时间作为其超时的时刻。
+ * 即将当前时间加上添加定时器时给定的延迟时间
+ * @param eventLoop
+ * @param milliseconds
+ * @param proc
+ * @param clientData
+ * @param finalizerProc
+ * @return
+ */
 long long aeCreateTimeEvent(aeEventLoop *eventLoop, long long milliseconds,
         aeTimeProc *proc, void *clientData,
         aeEventFinalizerProc *finalizerProc)
@@ -227,6 +294,12 @@ long long aeCreateTimeEvent(aeEventLoop *eventLoop, long long milliseconds,
     return id;
 }
 
+/***********************************
+ * 删除指定的时间事件
+ * @param eventLoop
+ * @param id  事件id
+ * @return
+ ************************************/
 int aeDeleteTimeEvent(aeEventLoop *eventLoop, long long id)
 {
     aeTimeEvent *te = eventLoop->timeEventHead;
@@ -251,6 +324,14 @@ int aeDeleteTimeEvent(aeEventLoop *eventLoop, long long id)
  *    Much better but still insertion or deletion of timers is O(N).
  * 2) Use a skiplist to have this operation as O(1) and insertion as O(log(N)).
  */
+
+
+/**
+ * 寻找离目前时间最近的时间事件
+ *
+ * @param eventLoop
+ * @return
+ */
 static aeTimeEvent *aeSearchNearestTimer(aeEventLoop *eventLoop)
 {
     aeTimeEvent *te = eventLoop->timeEventHead;
@@ -266,7 +347,11 @@ static aeTimeEvent *aeSearchNearestTimer(aeEventLoop *eventLoop)
     return nearest;
 }
 
-/* Process time events */
+/**********************************************************
+ * 处理时间事件
+ * @param eventLoop
+ * @return
+ ********************************************************/
 static int processTimeEvents(aeEventLoop *eventLoop) {
     int processed = 0;
     aeTimeEvent *te;
@@ -493,6 +578,13 @@ int aeWait(int fd, int mask, long long milliseconds) {
     }
 }
 
+/***************************************************************************
+ * 根据定时事件表计算需要等待的最短时间；调用 redis api aeApiPoll() 进入监听轮询，
+ * 如果没有事件发生就会进入睡眠状态，其实就是 I/O 多路复用 select() epoll() 等的调用；
+ * 有事件发生会被唤醒，处理已触发的 I/O 事件和定时事件
+ * @param eventLoop
+ *
+ * ***********************************************************************/
 void aeMain(aeEventLoop *eventLoop) {
     eventLoop->stop = 0;
     while (!eventLoop->stop) {
@@ -502,14 +594,27 @@ void aeMain(aeEventLoop *eventLoop) {
     }
 }
 
+
 char *aeGetApiName(void) {
     return aeApiName();
 }
 
+/*************************************************************************
+ * 设置beforeSleep处理函数
+ *
+ * @param eventLoop
+ * @param beforesleep
+ *********************************************************************/
 void aeSetBeforeSleepProc(aeEventLoop *eventLoop, aeBeforeSleepProc *beforesleep) {
     eventLoop->beforesleep = beforesleep;
 }
 
+/********************************************************8
+ *
+ * 设置afterSleep处理函数
+ * @param eventLoop
+ * @param aftersleep
+ ****************************************************************/
 void aeSetAfterSleepProc(aeEventLoop *eventLoop, aeBeforeSleepProc *aftersleep) {
     eventLoop->aftersleep = aftersleep;
 }
