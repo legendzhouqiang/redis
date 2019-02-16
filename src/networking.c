@@ -58,7 +58,11 @@ size_t sdsZmallocSize(sds s) {
 }
 
 /* Return the amount of memory used by the sds string at object->ptr
- * for a string object. */
+ * for a string object.
+ *
+ * 获取字符串对象占用的内存
+ *
+ * */
 size_t getStringObjectSdsUsedMemory(robj *o) {
     serverAssertWithInfo(NULL,o,o->type == OBJ_STRING);
     switch(o->encoding) {
@@ -68,7 +72,11 @@ size_t getStringObjectSdsUsedMemory(robj *o) {
     }
 }
 
-/* Client.reply list dup and free methods. */
+/**
+ * Client.reply list dup and free methods.
+ * @param o
+ * @return
+ */
 void *dupClientReplyValue(void *o) {
     clientReplyBlock *old = o;
     clientReplyBlock *buf = zmalloc(sizeof(clientReplyBlock) + old->size);
@@ -76,6 +84,10 @@ void *dupClientReplyValue(void *o) {
     return buf;
 }
 
+/**
+ * 释放客户端泛内容所占内存
+ * @param o
+ */
 void freeClientReplyValue(void *o) {
     zfree(o);
 }
@@ -84,8 +96,12 @@ int listMatchObjects(void *a, void *b) {
     return equalStringObjects(a,b);
 }
 
-/* This function links the client to the global linked list of clients.
- * unlinkClient() does the opposite, among other things. */
+/**
+ * This function links the client to the global linked list of clients.
+ * unlinkClient() does the opposite, among other things.
+ *
+ * @param c
+ */
 void linkClient(client *c) {
     listAddNodeTail(server.clients,c);
     /* Note that we remember the linked list node where the client is stored,
@@ -186,13 +202,18 @@ client *createClient(int fd) {
     return c;
 }
 
-/* This funciton puts the client in the queue of clients that should write
+/*
+ *
+ * This funciton puts the client in the queue of clients that should write
  * their output buffers to the socket. Note that it does not *yet* install
  * the write handler, to start clients are put in a queue of clients that need
  * to write, so we try to do that before returning in the event loop (see the
  * handleClientsWithPendingWrites() function).
  * If we fail and there is more data to write, compared to what the socket
- * buffers can hold, then we'll really install the handler. */
+ * buffers can hold, then we'll really install the handler.
+ *
+ *
+ * */
 void clientInstallWriteHandler(client *c) {
     /* Schedule the client to write the output buffers to the socket only
      * if not already done and, for slaves, if the slave can actually receive
@@ -212,7 +233,9 @@ void clientInstallWriteHandler(client *c) {
     }
 }
 
-/* This function is called every time we are going to transmit new data
+/* ************************************************************
+ *
+ * This function is called every time we are going to transmit new data
  * to the client. The behavior is the following:
  *
  * If the client should receive new data (normal clients will) the function
@@ -233,7 +256,11 @@ void clientInstallWriteHandler(client *c) {
  *
  * Typically gets called every time a reply is built, before adding more
  * data to the clients output buffers. If the function returns C_ERR no
- * data should be appended to the output buffers. */
+ * data should be appended to the output buffers.
+ *
+ * 此方法将会被调用于Client准备接受新数据之前调用，在fileEvent为客户端设定writer的handler处理事件
+ *
+ * ******************************************************************/
 int prepareClientToWrite(client *c) {
     /* If it's the Lua client we always return ok without installing any
      * handler since there is no socket at all. */
@@ -319,7 +346,13 @@ void _addReplyProtoToList(client *c, const char *s, size_t len) {
  * The following functions are the ones that commands implementations will call.
  * -------------------------------------------------------------------------- */
 
-/* Add the object 'obj' string representation to the client output buffer. */
+/***
+ *
+ * 添加robj到缓冲区
+ *
+ * @param c
+ * @param obj
+ */
 void addReply(client *c, robj *obj) {
     if (prepareClientToWrite(c) != C_OK) return;
 
@@ -339,8 +372,13 @@ void addReply(client *c, robj *obj) {
     }
 }
 
-/* Add the SDS 's' string to the client output buffer, as a side effect
- * the SDS string is freed. */
+/*************************************************************************
+ *
+ * 添加sds到client缓冲区
+ *
+ * @param c  客户端
+ * @param s  回复字符串
+ */
 void addReplySds(client *c, sds s) {
     if (prepareClientToWrite(c) != C_OK) {
         /* The caller expects the sds to be free'd. */
@@ -374,6 +412,14 @@ void addReplyProto(client *c, const char *s, size_t len) {
  * If the error code is already passed in the string 's', the error
  * code provided is used, otherwise the string "-ERR " for the generic
  * error code is automatically added. */
+/********************************************
+ *
+ * 将错误回复格式化添加到缓冲
+ *
+ * @param c
+ * @param s
+ * @param len
+ */
 void addReplyErrorLength(client *c, const char *s, size_t len) {
     /* If the string already starts with "-..." then the error code
      * is provided by the caller. Otherwise we use "-ERR". */
@@ -401,6 +447,15 @@ void addReplyErrorLength(client *c, const char *s, size_t len) {
     }
 }
 
+
+/**********************************************
+ *
+ * 封装addReplyErrorLength
+ *
+ *
+ * @param c
+ * @param err
+ */
 void addReplyError(client *c, const char *err) {
     addReplyErrorLength(c,err,strlen(err));
 }
@@ -421,12 +476,28 @@ void addReplyErrorFormat(client *c, const char *fmt, ...) {
     sdsfree(s);
 }
 
+/**************************************************************
+ *
+ *
+ * 将状态回复格式化添加到缓冲
+ *
+ * @param c
+ * @param s
+ * @param len
+ */
 void addReplyStatusLength(client *c, const char *s, size_t len) {
     addReplyProto(c,"+",1);
     addReplyProto(c,s,len);
     addReplyProto(c,"\r\n",2);
 }
 
+/**********************************************************
+ *
+ * 封装addReplyStatus
+ *
+ * @param c
+ * @param status
+ */
 void addReplyStatus(client *c, const char *status) {
     addReplyStatusLength(c,status,strlen(status));
 }
@@ -586,6 +657,7 @@ void addReplyLongLongWithPrefix(client *c, long long ll, char prefix) {
     addReplyProto(c,buf,len+3);
 }
 
+
 void addReplyLongLong(client *c, long long ll) {
     if (ll == 0)
         addReply(c,shared.czero);
@@ -696,14 +768,24 @@ void addReplyBulkCBuffer(client *c, const void *p, size_t len) {
     addReply(c,shared.crlf);
 }
 
-/* Add sds to reply (takes ownership of sds and frees it) */
+/***
+ *
+ * Add sds to reply (takes ownership of sds and frees it)
+ *
+ * @param c
+ * @param s
+ */
 void addReplyBulkSds(client *c, sds s)  {
     addReplyLongLongWithPrefix(c,sdslen(s),'$');
     addReplySds(c,s);
     addReply(c,shared.crlf);
 }
 
-/* Add a C null term string as bulk reply */
+/**
+ * Add a C null term string as bulk reply
+ * @param c
+ * @param s
+ */
 void addReplyBulkCString(client *c, const char *s) {
     if (s == NULL) {
         addReplyNull(c);
@@ -712,7 +794,11 @@ void addReplyBulkCString(client *c, const char *s) {
     }
 }
 
-/* Add a long long as a bulk reply */
+/**
+ * Add a long long as a bulk reply
+ * @param c
+ * @param ll
+ */
 void addReplyBulkLongLong(client *c, long long ll) {
     char buf[64];
     int len;
@@ -750,10 +836,16 @@ void addReplyVerbatim(client *c, const char *s, size_t len, const char *ext) {
     }
 }
 
-/* Add an array of C strings as status replies with a heading.
+/*
+ *
+ * Add an array of C strings as status replies with a heading.
  * This function is typically invoked by from commands that support
  * subcommands in response to the 'help' subcommand. The help array
- * is terminated by NULL sentinel. */
+ * is terminated by NULL sentinel.
+ *
+ *
+ *
+ * */
 void addReplyHelp(client *c, const char **help) {
     sds cmd = sdsnew((char*) c->argv[0]->ptr);
     void *blenp = addReplyDeferredLen(c);
@@ -770,9 +862,14 @@ void addReplyHelp(client *c, const char **help) {
     setDeferredArrayLen(c,blenp,blen);
 }
 
-/* Add a suggestive error reply.
+/*
+ * Add a suggestive error reply.
  * This function is typically invoked by from commands that support
- * subcommands in response to an unknown subcommand or argument error. */
+ * subcommands in response to an unknown subcommand or argument error.
+ *
+ * 命令语法错误回复
+ *
+ * */
 void addReplySubcommandSyntaxError(client *c) {
     sds cmd = sdsnew((char*) c->argv[0]->ptr);
     sdstoupper(cmd);
@@ -813,7 +910,11 @@ static void acceptCommonHandler(int fd, int flags, char *ip) {
     /* If maxclient directive is set and this is one client more... close the
      * connection. Note that we create the client instead to check before
      * for this condition, since now the socket is already set in non-blocking
-     * mode and we can send an error for free using the Kernel I/O */
+     * mode and we can send an error for free using the Kernel I/O
+     *
+     * client连接个数超过server.maxclients，将被拒绝，释放client
+     *
+     * */
     if (listLength(server.clients) > server.maxclients) {
         char *err = "-ERR max number of clients reached\r\n";
 
@@ -2365,13 +2466,19 @@ int checkClientOutputBufferLimits(client *c) {
     return soft || hard;
 }
 
-/* Asynchronously close a client if soft or hard limit is reached on the
+/* ***************************************************************
+ *
+ * Asynchronously close a client if soft or hard limit is reached on the
  * output buffer size. The caller can check if the client will be closed
  * checking if the client CLIENT_CLOSE_ASAP flag is set.
  *
  * Note: we need to close the client asynchronously because this function is
  * called from contexts where the client can't be freed safely, i.e. from the
- * lower level functions pushing data inside the client output buffers. */
+ * lower level functions pushing data inside the client output buffers.
+ *
+ * 异步的关闭Client，如果缓冲区中的软限制或是硬限制已经到达的时候，缓冲区超出限制的结果会导致释放不安全，
+ *
+ **************************************************************** */
 void asyncCloseClientOnOutputBufferLimitReached(client *c) {
     if (c->fd == -1) return; /* It is unsafe to free fake clients. */
     serverAssert(c->reply_bytes < SIZE_MAX-(1024*64));
@@ -2385,10 +2492,12 @@ void asyncCloseClientOnOutputBufferLimitReached(client *c) {
     }
 }
 
-/* Helper function used by freeMemoryIfNeeded() in order to flush slaves
+/* *************************************************************
+ * Helper function used by freeMemoryIfNeeded() in order to flush slaves
  * output buffers without returning control to the event loop.
  * This is also called by SHUTDOWN for a best-effort attempt to send
- * slaves the latest writes. */
+ * slaves the latest writes.
+ * ************************************************************/
 void flushSlavesOutputBuffers(void) {
     listIter li;
     listNode *ln;
@@ -2414,7 +2523,10 @@ void flushSlavesOutputBuffers(void) {
     }
 }
 
-/* Pause clients up to the specified unixtime (in ms). While clients
+/*******************************************************
+ *
+ *
+ * Pause clients up to the specified unixtime (in ms). While clients
  * are paused no command is processed from clients, so the data set can't
  * change during that time.
  *
@@ -2430,15 +2542,21 @@ void flushSlavesOutputBuffers(void) {
  * In such a case, the pause is extended if the duration is more than the
  * time left for the previous duration. However if the duration is smaller
  * than the time left for the previous pause, no change is made to the
- * left duration. */
+ * left duration.
+ * **************************************************************/
 void pauseClients(mstime_t end) {
     if (!server.clients_paused || end > server.clients_pause_end_time)
         server.clients_pause_end_time = end;
     server.clients_paused = 1;
 }
 
-/* Return non-zero if clients are currently paused. As a side effect the
- * function checks if the pause time was reached and clear it. */
+/*********************************************************************
+ *
+ * Return non-zero if clients are currently paused. As a side effect the
+ * function checks if the pause time was reached and clear it
+ *
+ * @return
+ *********************************************************************/
 int clientsArePaused(void) {
     if (server.clients_paused &&
         server.clients_pause_end_time < server.mstime)
@@ -2464,7 +2582,8 @@ int clientsArePaused(void) {
     return server.clients_paused;
 }
 
-/* This function is called by Redis in order to process a few events from
+/* *******************************************************************
+ * This function is called by Redis in order to process a few events from
  * time to time while blocked into some not interruptible operation.
  * This allows to reply to clients with the -LOADING error while loading the
  * data set at startup or after a full resynchronization with the master
@@ -2475,7 +2594,8 @@ int clientsArePaused(void) {
  * some event was processed, in order to go forward with the accept, read,
  * write, close sequence needed to serve a client.
  *
- * The function returns the total number of events processed. */
+ * The function returns the total number of events processed.
+ * *******************************************************************/
 int processEventsWhileBlocked(void) {
     int iterations = 4; /* See the function top-comment. */
     int count = 0;

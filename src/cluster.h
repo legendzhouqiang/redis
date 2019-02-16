@@ -37,7 +37,11 @@
 
 struct clusterNode;
 
-/* clusterLink encapsulates everything needed to talk with a remote node. */
+/*
+ * clusterLink encapsulates everything needed to talk with a remote node.
+ *
+ * 节点与一个节点建立的连接
+ * */
 typedef struct clusterLink {
     mstime_t ctime;             /* Link creation time */
     int fd;                     /* TCP socket file descriptor */
@@ -107,12 +111,19 @@ typedef struct clusterLink {
 #define CLUSTER_MODULE_FLAG_NO_FAILOVER (1<<1)
 #define CLUSTER_MODULE_FLAG_NO_REDIRECTION (1<<2)
 
-/* This structure represent elements of node->fail_reports. */
+/*
+ * This structure represent elements of node->fail_reports.
+ *
+ *
+ * */
 typedef struct clusterNodeFailReport {
     struct clusterNode *node;  /* Node reporting the failure condition. */
     mstime_t time;             /* Time of the last report from this node. */
 } clusterNodeFailReport;
 
+/**
+ * 集群节点
+ */
 typedef struct clusterNode {
     mstime_t ctime; /* Node object creation time. */
     char name[CLUSTER_NAMELEN]; /* Node name, hex string, sha1-size */
@@ -140,6 +151,9 @@ typedef struct clusterNode {
     list *fail_reports;         /* List of nodes signaling this as failing */
 } clusterNode;
 
+/**
+ * cluster 集群节点状态
+ */
 typedef struct clusterState {
     clusterNode *myself;  /* This node */
     uint64_t currentEpoch;
@@ -182,9 +196,15 @@ typedef struct clusterState {
 
 /* Redis cluster messages header */
 
-/* Initially we don't know our "name", but we'll find it once we connect
+/*
+ *
+ * cluster gossip消息结构
+ *
+ * Initially we don't know our "name", but we'll find it once we connect
  * to the first node, using the getsockname() function. Then we'll use this
- * address for all the next messages. */
+ * address for all the next messages.
+ *
+ * */
 typedef struct {
     char nodename[CLUSTER_NAMELEN];
     uint32_t ping_sent;
@@ -196,9 +216,13 @@ typedef struct {
     uint32_t notused1;
 } clusterMsgDataGossip;
 
+/**
+ * 集群失败消息
+ */
 typedef struct {
     char nodename[CLUSTER_NAMELEN];
 } clusterMsgDataFail;
+
 
 typedef struct {
     uint32_t channel_len;

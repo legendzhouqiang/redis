@@ -32,10 +32,12 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-/* This function provide us access to the original libc free(). This is useful
+/*
+ * This function provide us access to the original libc free(). This is useful
  * for instance to free results obtained by backtrace_symbols(). We need
  * to define this function before including zmalloc.h that may shadow the
- * free implementation if we use jemalloc or another non standard allocator. */
+ * free implementation if we use jemalloc or another non standard allocator.
+ * */
 void zlibc_free(void *ptr) {
     free(ptr);
 }
@@ -71,12 +73,21 @@ void zlibc_free(void *ptr) {
 #define dallocx(ptr,flags) je_dallocx(ptr,flags)
 #endif
 
+/**
+ *
+ * 宏函数，更新内存使用
+ *
+ */
 #define update_zmalloc_stat_alloc(__n) do { \
     size_t _n = (__n); \
     if (_n&(sizeof(long)-1)) _n += sizeof(long)-(_n&(sizeof(long)-1)); \
     atomicIncr(used_memory,__n); \
 } while(0)
 
+
+/**
+ * 宏函数更新内存使用
+ */
 #define update_zmalloc_stat_free(__n) do { \
     size_t _n = (__n); \
     if (_n&(sizeof(long)-1)) _n += sizeof(long)-(_n&(sizeof(long)-1)); \
@@ -84,8 +95,17 @@ void zlibc_free(void *ptr) {
 } while(0)
 
 static size_t used_memory = 0;
+
+/**
+ * 线程锁
+ */
 pthread_mutex_t used_memory_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+/**
+ * 内存溢出
+ *
+ * @param size
+ */
 static void zmalloc_default_oom(size_t size) {
     fprintf(stderr, "zmalloc: Out of memory trying to allocate %zu bytes\n",
         size);
@@ -93,8 +113,16 @@ static void zmalloc_default_oom(size_t size) {
     abort();
 }
 
+/**
+ * 内存溢出函数指针
+ */
 static void (*zmalloc_oom_handler)(size_t) = zmalloc_default_oom;
 
+/**
+ * 分配内存
+ * @param size
+ * @return
+ */
 void *zmalloc(size_t size) {
     void *ptr = malloc(size+PREFIX_SIZE);
 
@@ -127,6 +155,20 @@ void zfree_no_tcache(void *ptr) {
 }
 #endif
 
+
+/**
+ *
+ * C语言跟内存申请相关的函数主要有 alloca、calloc、malloc、free、realloc等.
+ * <1>alloca是向栈申请内存,因此无需释放.
+ * <2>malloc分配的内存是位于堆中的,并且没有初始化内存的内容,因此基本上malloc之后,调用函数memset来初始化这部分的内存空间.
+ * <3>calloc则将初始化这部分的内存,设置为0.
+ * <4>realloc则对malloc申请的内存进行大小的调整.
+ * <5>申请的内存最终需要通过函数free来释放.
+ *
+ *
+ * @param size
+ * @return
+ */
 void *zcalloc(size_t size) {
     void *ptr = calloc(1, size+PREFIX_SIZE);
 
@@ -141,6 +183,15 @@ void *zcalloc(size_t size) {
 #endif
 }
 
+
+/**
+ *
+ * realloc则对malloc申请的内存进行大小的调整.
+ *
+ * @param ptr
+ * @param size
+ * @return
+ */
 void *zrealloc(void *ptr, size_t size) {
 #ifndef HAVE_MALLOC_SIZE
     void *realptr;
@@ -187,6 +238,12 @@ size_t zmalloc_usable(void *ptr) {
 }
 #endif
 
+/**
+ *
+ * 释放内存
+ *
+ * @param ptr
+ */
 void zfree(void *ptr) {
 #ifndef HAVE_MALLOC_SIZE
     void *realptr;
@@ -205,6 +262,12 @@ void zfree(void *ptr) {
 #endif
 }
 
+
+/**
+ * 字符串复制
+ * @param s
+ * @return
+ */
 char *zstrdup(const char *s) {
     size_t l = strlen(s)+1;
     char *p = zmalloc(l);
@@ -213,12 +276,21 @@ char *zstrdup(const char *s) {
     return p;
 }
 
+
+/**
+ * 查询已使用空间大小
+ * @return
+ */
 size_t zmalloc_used_memory(void) {
     size_t um;
     atomicGet(used_memory,um);
     return um;
 }
 
+
+/**
+ * 设置oom（内存不足）函数指针的值
+ */
 void zmalloc_set_oom_handler(void (*oom_handler)(size_t)) {
     zmalloc_oom_handler = oom_handler;
 }
@@ -231,7 +303,16 @@ void zmalloc_set_oom_handler(void (*oom_handler)(size_t)) {
  *
  * For this kind of "fast RSS reporting" usages use instead the
  * function RedisEstimateRSS() that is a much faster (and less precise)
- * version of the function. */
+ * version of the function.
+ *
+ *
+ *
+ * VSS - Virtual Set Size 虚拟耗用内存（包含共享库占用的内存）
+ * RSS - Resident Set Size 实际使用物理内存（包含共享库占用的内存
+ * PSS - Proportional Set Size 实际使用的物理内存（比例分配共享库占用的内存）
+ * USS - Unique Set Size 进程独自占用的物理内存（不包含共享库占用的内存）
+ * VSS >=Rss >=PSS>=USS
+ * */
 
 #if defined(HAVE_PROC_STAT)
 #include <unistd.h>
@@ -239,6 +320,9 @@ void zmalloc_set_oom_handler(void (*oom_handler)(size_t)) {
 #include <sys/stat.h>
 #include <fcntl.h>
 
+/**
+ * 通过查询/proc/<pid>/stat文件获得RSS的值
+ */
 size_t zmalloc_get_rss(void) {
     int page = sysconf(_SC_PAGESIZE);
     size_t rss;
@@ -279,6 +363,10 @@ size_t zmalloc_get_rss(void) {
 #include <mach/task.h>
 #include <mach/mach_init.h>
 
+/**
+ * 通过查询/proc/<pid>/stat文件获得RSS的值
+ * @return
+ */
 size_t zmalloc_get_rss(void) {
     task_t task = MACH_PORT_NULL;
     struct task_basic_info t_info;
@@ -290,6 +378,9 @@ size_t zmalloc_get_rss(void) {
 
     return t_info.resident_size;
 }
+/**
+ * 通过查询/proc/<pid>/stat文件获得RSS的值
+ */
 #else
 size_t zmalloc_get_rss(void) {
     /* If we can't get the RSS in an OS-specific way for this system just

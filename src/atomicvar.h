@@ -76,9 +76,17 @@
     oldvalue_var = __atomic_fetch_add(&var,(count),__ATOMIC_RELAXED); \
 } while(0)
 #define atomicDecr(var,count) __atomic_sub_fetch(&var,(count),__ATOMIC_RELAXED)
+
+/**
+ * 原子拷贝值
+ */
 #define atomicGet(var,dstvar) do { \
     dstvar = __atomic_load_n(&var,__ATOMIC_RELAXED); \
 } while(0)
+
+/**
+ * 原子设置值
+ */
 #define atomicSet(var,value) __atomic_store_n(&var,value,__ATOMIC_RELAXED)
 #define REDIS_ATOMIC_API "atomic-builtin"
 

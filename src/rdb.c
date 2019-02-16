@@ -87,6 +87,7 @@ void rdbLoadRaw(rio *rdb, void *buf, uint64_t len) {
     }
 }
 
+
 int rdbSaveType(rio *rdb, unsigned char type) {
     return rdbWriteRaw(rdb,&type,1);
 }
