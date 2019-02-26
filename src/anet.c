@@ -58,6 +58,14 @@ static void anetSetError(char *err, const char *fmt, ...)
     va_end(ap);
 }
 
+
+/**
+ * 设置套接字的io操作是否为阻塞操作
+ * @param err
+ * @param fd
+ * @param non_block
+ * @return
+ */
 int anetSetBlock(char *err, int fd, int non_block) {
     int flags;
 
@@ -69,6 +77,7 @@ int anetSetBlock(char *err, int fd, int non_block) {
         return ANET_ERR;
     }
 
+    //设置socket是否为阻塞状态
     if (non_block)
         flags |= O_NONBLOCK;
     else
@@ -92,6 +101,13 @@ int anetBlock(char *err, int fd) {
 /* Set TCP keep alive option to detect dead peers. The interval option
  * is only used for Linux as we are using Linux-specific APIs to set
  * the probe send time, interval, and count. */
+/**
+ * tcp保活探测包参数设置
+ * @param err
+ * @param fd
+ * @param interval
+ * @return
+ */
 int anetKeepAlive(char *err, int fd, int interval)
 {
     int val = 1;
@@ -107,7 +123,10 @@ int anetKeepAlive(char *err, int fd, int interval)
      * set to 7200 by default on Linux. Modify settings to make the feature
      * actually useful. */
 
-    /* Send first probe after interval. */
+    /* Send first probe after interval.
+     *
+     * 开始首次KeepAlive探测前的TCP空闭时间
+     * */
     val = interval;
     if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &val, sizeof(val)) < 0) {
         anetSetError(err, "setsockopt TCP_KEEPIDLE: %s\n", strerror(errno));
@@ -116,7 +135,11 @@ int anetKeepAlive(char *err, int fd, int interval)
 
     /* Send next probes after the specified interval. Note that we set the
      * delay as interval / 3, as we send three probes before detecting
-     * an error (see the next setsockopt call). */
+     * an error (see the next setsockopt call).
+     *
+     *
+     * tcp_keepalive_intvl，保活探测消息的发送频率。默认值为75s。
+     * */
     val = interval/3;
     if (val == 0) val = 1;
     if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &val, sizeof(val)) < 0) {
@@ -125,7 +148,10 @@ int anetKeepAlive(char *err, int fd, int interval)
     }
 
     /* Consider the socket in error state after three we send three ACK
-     * probes without getting a reply. */
+     * probes without getting a reply.
+     * 判定断开前的KeepAlive探测次数
+     *
+     * */
     val = 3;
     if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &val, sizeof(val)) < 0) {
         anetSetError(err, "setsockopt TCP_KEEPCNT: %s\n", strerror(errno));
@@ -138,6 +164,14 @@ int anetKeepAlive(char *err, int fd, int interval)
     return ANET_OK;
 }
 
+/**
+ * 启动TCP_NODELAY，就意味着禁用了Nagle算法，允许小包的发送。
+ * 对于延时敏感型，同时数据传输量比较小的应用，开启TCP_NODELAY选项无疑是一个正确的选择
+ * @param err
+ * @param fd
+ * @param val
+ * @return
+ */
 static int anetSetTcpNoDelay(char *err, int fd, int val)
 {
     if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val)) == -1)
@@ -159,6 +193,14 @@ int anetDisableTcpNoDelay(char *err, int fd)
 }
 
 
+
+/**
+ * 设置套接字发送缓存区
+ * @param err
+ * @param fd
+ * @param buffsize
+ * @return
+ */
 int anetSetSendBuffer(char *err, int fd, int buffsize)
 {
     if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &buffsize, sizeof(buffsize)) == -1)
@@ -169,6 +211,16 @@ int anetSetSendBuffer(char *err, int fd, int buffsize)
     return ANET_OK;
 }
 
+
+/**
+ * KeepAlive默认情况下是关闭的，可以被上层应用开启和关闭
+ * tcp_keepalive_time: KeepAlive的空闲时长，或者说每次正常发送心跳的周期，默认值为7200s（2小时）
+ * tcp_keepalive_intvl: KeepAlive探测包的发送间隔，默认值为75s
+ * tcp_keepalive_probes: 在tcp_keepalive_time之后，没有接收到对方确认，继续发送保活探测包次数，默认值为9（次）
+ * @param err
+ * @param fd
+ * @return
+ */
 int anetTcpKeepAlive(char *err, int fd)
 {
     int yes = 1;
@@ -180,7 +232,10 @@ int anetTcpKeepAlive(char *err, int fd)
 }
 
 /* Set the socket send timeout (SO_SNDTIMEO socket option) to the specified
- * number of milliseconds, or disable it if the 'ms' argument is zero. */
+ * number of milliseconds, or disable it if the 'ms' argument is zero.
+ *
+ *   设置套接字发送数据超时时间，如果超时则返回-1
+ */
 int anetSendTimeout(char *err, int fd, long long ms) {
     struct timeval tv;
 
@@ -215,6 +270,8 @@ int anetGenericResolve(char *err, char *host, char *ipbuf, size_t ipbuf_len,
         anetSetError(err, "%s", gai_strerror(rv));
         return ANET_ERR;
     }
+
+    //ipv4地址
     if (info->ai_family == AF_INET) {
         struct sockaddr_in *sa = (struct sockaddr_in *)info->ai_addr;
         inet_ntop(AF_INET, &(sa->sin_addr), ipbuf, ipbuf_len);
@@ -235,6 +292,18 @@ int anetResolveIP(char *err, char *host, char *ipbuf, size_t ipbuf_len) {
     return anetGenericResolve(err,host,ipbuf,ipbuf_len,ANET_IP_ONLY);
 }
 
+/**
+ * SO_REUSEADDR允许启动一个监听服务器并捆绑其众所周知端口，即使以前建立的将此端口用做他们的本地端口的连接仍存在。这通常是重启监听服务器时出现，若不设置此选项，则bind时将出错。
+ *
+ * SO_REUSEADDR允许在同一端口上启动同一服务器的多个实例，只要每个实例捆绑一个不同的本地IP地址即可。对于TCP，我们根本不可能启动捆绑相同IP地址和相同端口号的多个服务器。
+ *
+ * SO_REUSEADDR允许单个进程捆绑同一端口到多个套接口上，只要每个捆绑指定不同的本地IP地址即可。这一般不用于TCP服务器。
+ *
+ * SO_REUSEADDR允许完全重复的捆绑：当一个IP地址和端口绑定到某个套接口上时，还允许此IP地址和端口捆绑到另一个套接口上。一般来说，这个特性仅在支持多播的系统上才有，而且只对UDP套接口而言（TCP不支持多播）
+ * @param err
+ * @param fd
+ * @return
+ */
 static int anetSetReuseAddr(char *err, int fd) {
     int yes = 1;
     /* Make sure connection-intensive things like the redis benchmark
@@ -437,6 +506,15 @@ int anetWrite(int fd, char *buf, int count)
     return totlen;
 }
 
+/**
+ *套接字绑定到指定地址，并监听客户端连接
+ * @param err
+ * @param s
+ * @param sa
+ * @param len
+ * @param backlog
+ * @return
+ */
 static int anetListen(char *err, int s, struct sockaddr *sa, socklen_t len, int backlog) {
     if (bind(s,sa,len) == -1) {
         anetSetError(err, "bind: %s", strerror(errno));
@@ -462,6 +540,15 @@ static int anetV6Only(char *err, int s) {
     return ANET_OK;
 }
 
+/**
+ * 创建TcpServer
+ * @param err
+ * @param port
+ * @param bindaddr
+ * @param af
+ * @param backlog
+ * @return
+ */
 static int _anetTcpServer(char *err, int port, char *bindaddr, int af, int backlog)
 {
     int s = -1, rv;
@@ -483,7 +570,9 @@ static int _anetTcpServer(char *err, int port, char *bindaddr, int af, int backl
             continue;
 
         if (af == AF_INET6 && anetV6Only(err,s) == ANET_ERR) goto error;
+        //设置地址重用
         if (anetSetReuseAddr(err,s) == ANET_ERR) goto error;
+        //监听端口
         if (anetListen(err,s,p->ai_addr,p->ai_addrlen,backlog) == ANET_ERR) s = ANET_ERR;
         goto end;
     }
@@ -545,6 +634,15 @@ static int anetGenericAccept(char *err, int s, struct sockaddr *sa, socklen_t *l
     return fd;
 }
 
+/**
+ * 接口客户端连接
+ * @param err
+ * @param s
+ * @param ip
+ * @param ip_len
+ * @param port
+ * @return
+ */
 int anetTcpAccept(char *err, int s, char *ip, size_t ip_len, int *port) {
     int fd;
     struct sockaddr_storage sa;
@@ -552,6 +650,7 @@ int anetTcpAccept(char *err, int s, char *ip, size_t ip_len, int *port) {
     if ((fd = anetGenericAccept(err,s,(struct sockaddr*)&sa,&salen)) == -1)
         return ANET_ERR;
 
+    //IPV4协议域
     if (sa.ss_family == AF_INET) {
         struct sockaddr_in *s = (struct sockaddr_in *)&sa;
         if (ip) inet_ntop(AF_INET,(void*)&(s->sin_addr),ip,ip_len);
@@ -637,6 +736,7 @@ int anetSockName(int fd, char *ip, size_t ip_len, int *port) {
         ip[1] = '\0';
         return -1;
     }
+    //ipv4 协议
     if (sa.ss_family == AF_INET) {
         struct sockaddr_in *s = (struct sockaddr_in *)&sa;
         if (ip) inet_ntop(AF_INET,(void*)&(s->sin_addr),ip,ip_len);

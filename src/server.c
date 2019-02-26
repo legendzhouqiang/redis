@@ -70,6 +70,7 @@ double R_Zero, R_PosInf, R_NegInf, R_Nan;
 
 /* Global vars */
 struct redisServer server; /* Server global state */
+
 volatile unsigned long lru_clock; /* Server global current LRU time. */
 
 /* Our command table.
@@ -177,6 +178,11 @@ volatile unsigned long lru_clock; /* Server global current LRU time. */
  *    TYPE, EXPIRE*, PEXPIRE*, TTL, PTTL, ...
  */
 
+
+
+/**
+ * 命令命令处理函数映射关系
+ */
 struct redisCommand redisCommandTable[] = {
     {"module",moduleCommand,-2,
      "admin no-script",
@@ -1007,8 +1013,12 @@ struct redisCommand redisCommandTable[] = {
  * function of Redis may be called from other threads. */
 void nolocks_localtime(struct tm *tmp, time_t t, time_t tz, int dst);
 
-/* Low level logging. To use only for very big messages, otherwise
- * serverLog() is to prefer. */
+/*
+ *
+ * Low level logging. To use only for very big messages, otherwise
+ * serverLog() is to prefer.
+ *
+ */
 void serverLogRaw(int level, const char *msg) {
     const int syslogLevelMap[] = { LOG_DEBUG, LOG_INFO, LOG_NOTICE, LOG_WARNING };
     const char *c = ".-*#";
@@ -1052,9 +1062,14 @@ void serverLogRaw(int level, const char *msg) {
     if (server.syslog_enabled) syslog(syslogLevelMap[level], "%s", msg);
 }
 
-/* Like serverLogRaw() but with printf-alike support. This is the function that
+/**
+ * * Like serverLogRaw() but with printf-alike support. This is the function that
  * is used across the code. The raw version is only used in order to dump
- * the INFO output on crash. */
+ * the INFO output on crash.
+ * @param level
+ * @param fmt
+ * @param ...
+ */
 void serverLog(int level, const char *fmt, ...) {
     va_list ap;
     char msg[LOG_MAX_LEN];
@@ -1241,7 +1256,9 @@ uint64_t dictEncObjHash(const void *key) {
 }
 
 /* Generic hash table type where keys are Redis Objects, Values
- * dummy pointers. */
+ * dummy pointers.
+ *
+ */
 dictType objectKeyPointerValueDictType = {
     dictEncObjHash,            /* hash function */
     NULL,                      /* key dup */
@@ -2597,9 +2614,11 @@ int listenToPort(int port, int *fds, int *count) {
     /* Force binding of 0.0.0.0 if no bind address is specified, always
      * entering the loop if j == 0. */
     if (server.bindaddr_count == 0) server.bindaddr[0] = NULL;
+
     for (j = 0; j < server.bindaddr_count || j == 0; j++) {
         if (server.bindaddr[j] == NULL) {
             int unsupported = 0;
+
             /* Bind * for both IPv6 and IPv4, we enter here only if
              * server.bindaddr_count == 0. */
             fds[*count] = anetTcp6Server(server.neterr,port,NULL,
@@ -2656,7 +2675,10 @@ int listenToPort(int port, int *fds, int *count) {
 
 /* Resets the stats that we expose via INFO or other means that we want
  * to reset via CONFIG RESETSTAT. The function is also used in order to
- * initialize these fields in initServer() at server startup. */
+ * initialize these fields in initServer() at server startup.
+ *
+ *  重置server 状态
+ * */
 void resetServerStats(void) {
     int j;
 
@@ -2706,10 +2728,20 @@ void initServer(void) {
     server.hz = server.config_hz;
     server.pid = getpid();
     server.current_client = NULL;
+    //创建双向链表保存client,
     server.clients = listCreate();
     server.clients_index = raxNew();
+    /**
+     * 异步关闭的客户端
+     */
     server.clients_to_close = listCreate();
+    /**
+     *  redis slave节点
+     */
     server.slaves = listCreate();
+    /**
+     * 监控节点
+     */
     server.monitors = listCreate();
     server.clients_pending_write = listCreate();
     server.slaveseldb = -1; /* Force to emit the first SELECT command. */
@@ -2720,8 +2752,12 @@ void initServer(void) {
     server.clients_paused = 0;
     server.system_memory_size = zmalloc_get_memory_size();
 
+    // 创建共享对象
     createSharedObjects();
     adjustOpenFilesLimit();
+    /**
+     * 创建事件循环
+     */
     server.el = aeCreateEventLoop(server.maxclients+CONFIG_FDSET_INCR);
     if (server.el == NULL) {
         serverLog(LL_WARNING,
@@ -2729,14 +2765,24 @@ void initServer(void) {
             strerror(errno));
         exit(1);
     }
+    /**
+     *分配redisDB 数据库内存
+     */
     server.db = zmalloc(sizeof(redisDb)*server.dbnum);
 
-    /* Open the TCP listening socket for the user commands. */
+    /*
+     * Open the TCP listening socket for the user commands.
+     *
+     */
     if (server.port != 0 &&
         listenToPort(server.port,server.ipfd,&server.ipfd_count) == C_ERR)
         exit(1);
 
-    /* Open the listening Unix domain socket. */
+    /*
+     *
+     * Open the listening Unix domain socket.
+     *
+     */
     if (server.unixsocket != NULL) {
         unlink(server.unixsocket); /* don't care if this fails */
         server.sofd = anetUnixServer(server.neterr,server.unixsocket,
@@ -2754,7 +2800,10 @@ void initServer(void) {
         exit(1);
     }
 
-    /* Create the Redis databases, and initialize other internal state. */
+    /*
+     * Create the Redis databases, and initialize other internal state.
+     * 创建并初始化数据库结构
+     */
     for (j = 0; j < server.dbnum; j++) {
         server.db[j].dict = dictCreate(&dbDictType,NULL);
         server.db[j].expires = dictCreate(&keyptrDictType,NULL);
@@ -2766,10 +2815,14 @@ void initServer(void) {
         server.db[j].defrag_later = listCreate();
     }
     evictionPoolAlloc(); /* Initialize the LRU keys pool. */
+
+    // 创建 PUBSUB 相关结构
     server.pubsub_channels = dictCreate(&keylistDictType,NULL);
     server.pubsub_patterns = listCreate();
     listSetFreeMethod(server.pubsub_patterns,freePubsubPattern);
     listSetMatchMethod(server.pubsub_patterns,listMatchPubsubPattern);
+
+
     server.cronloops = 0;
     server.rdb_child_pid = -1;
     server.aof_child_pid = -1;
@@ -2801,16 +2854,24 @@ void initServer(void) {
     server.aof_last_write_errno = 0;
     server.repl_good_slaves_count = 0;
 
-    /* Create the timer callback, this is our way to process many background
+    /*
+     * Create the timer callback, this is our way to process many background
      * operations incrementally, like clients timeout, eviction of unaccessed
-     * expired keys and so forth. */
+     * expired keys and so forth.
+     *
+     * 时间事件
+     *
+     */
     if (aeCreateTimeEvent(server.el, 1, serverCron, NULL, NULL) == AE_ERR) {
         serverPanic("Can't create event loop timers.");
         exit(1);
     }
 
     /* Create an event handler for accepting new connections in TCP and Unix
-     * domain sockets. */
+     * domain sockets.
+     *
+     * 创建接受客户端连接文件事件处理器
+     * */
     for (j = 0; j < server.ipfd_count; j++) {
         if (aeCreateFileEvent(server.el, server.ipfd[j], AE_READABLE,
             acceptTcpHandler,NULL) == AE_ERR)
@@ -2819,12 +2880,21 @@ void initServer(void) {
                     "Unrecoverable error creating server.ipfd file event.");
             }
     }
+
+    //创建接受unix域客户端连接事件处理器
     if (server.sofd > 0 && aeCreateFileEvent(server.el,server.sofd,AE_READABLE,
-        acceptUnixHandler,NULL) == AE_ERR) serverPanic("Unrecoverable error creating server.sofd file event.");
+        acceptUnixHandler,NULL) == AE_ERR) {
+        serverPanic("Unrecoverable error creating server.sofd file event.");
+    }
 
 
-    /* Register a readable event for the pipe used to awake the event loop
-     * when a blocked client in a module needs attention. */
+    /*
+     *
+     * Register a readable event for the pipe used to awake the event loop
+     * when a blocked client in a module needs attention.
+     * 管道事件处理函数
+     *
+     * */
     if (aeCreateFileEvent(server.el, server.module_blocked_pipe[0], AE_READABLE,
         moduleBlockedClientPipeReadable,NULL) == AE_ERR) {
             serverPanic(
@@ -2832,7 +2902,13 @@ void initServer(void) {
                 "blocked clients subsystem.");
     }
 
-    /* Open the AOF file if needed. */
+    /*
+     *
+     * 如果开启了aof持久化机制
+     *
+     * Open the AOF file if needed.
+     *
+     */
     if (server.aof_state == AOF_ON) {
         server.aof_fd = open(server.aof_filename,
                                O_WRONLY|O_APPEND|O_CREAT,0644);
@@ -2846,16 +2922,32 @@ void initServer(void) {
     /* 32 bit instances are limited to 4GB of address space, so if there is
      * no explicit limit in the user provided configuration we set a limit
      * at 3 GB using maxmemory with 'noeviction' policy'. This avoids
-     * useless crashes of the Redis instance for out of memory. */
+     * useless crashes of the Redis instance for out of memory.
+     *
+     * 如果是32位系统，最大可用位3GB
+     *
+     *
+     * */
     if (server.arch_bits == 32 && server.maxmemory == 0) {
         serverLog(LL_WARNING,"Warning: 32 bit instance detected but no memory limit set. Setting 3 GB maxmemory limit with 'noeviction' policy now.");
         server.maxmemory = 3072LL*(1024*1024); /* 3 GB */
         server.maxmemory_policy = MAXMEMORY_NO_EVICTION;
     }
 
-    if (server.cluster_enabled) clusterInit();
+    /**
+     * 如果开始redis集群,初始化集群
+     */
+    if (server.cluster_enabled) {
+        clusterInit();
+    }
+
+   // 初始化复制功能有关的脚本缓存
     replicationScriptCacheInit();
+
+    // 初始化脚本系统
     scriptingInit(1);
+
+    // 初始化慢查询功能
     slowlogInit();
     latencyMonitorInit();
     bioInit();
@@ -4434,6 +4526,13 @@ void createPidFile(void) {
     }
 }
 
+/**
+ *
+ * redis采用的是单进程多线程的模式。当redis.conf中选项daemonize设置成yes时，代表开启守护进程模式。
+ * 在该模式下，redis会在后台运行，
+ * 并将进程pid号写入至redis.conf选项pidfile设置的文件中，此时redis将一直运行，除非手动kill该进程
+ *
+ */
 void daemonize(void) {
     int fd;
 
@@ -4581,7 +4680,12 @@ int checkForSentinelMode(int argc, char **argv) {
     return 0;
 }
 
-/* Function called at startup to load RDB or AOF file in memory. */
+/*
+ * Function called at startup to load RDB or AOF file in memory.
+ *
+ * 从持久化文件载入数据
+ *
+ */
 void loadDataFromDisk(void) {
     long long start = ustime();
     if (server.aof_state == AOF_ON) {
@@ -4734,7 +4838,12 @@ int redisIsSupervised(int mode) {
     return 0;
 }
 
-
+/**
+ * main 函数入口地址
+ * @param argc
+ * @param argv
+ * @return
+ */
 int main(int argc, char **argv) {
     struct timeval tv;
     int j;
@@ -4773,7 +4882,10 @@ int main(int argc, char **argv) {
 #endif
     setlocale(LC_COLLATE,"");
     tzset(); /* Populates 'timezone' global. */
+
+    //内存溢出处理器
     zmalloc_set_oom_handler(redisOutOfMemoryHandler);
+
     srand(time(NULL)^getpid());
     gettimeofday(&tv,NULL);
 
@@ -4781,7 +4893,10 @@ int main(int argc, char **argv) {
     getRandomHexChars(hashseed,sizeof(hashseed));
     dictSetHashFunctionSeed((uint8_t*)hashseed);
     server.sentinel_mode = checkForSentinelMode(argc,argv);
+
+    //初始化server配置
     initServerConfig();
+
     ACLInit(); /* The ACL subsystem must be initialized ASAP because the
                   basic networking code and client creation depends on it. */
     moduleInitModulesSystem();
@@ -4791,11 +4906,16 @@ int main(int argc, char **argv) {
     server.executable = getAbsolutePath(argv[0]);
     server.exec_argv = zmalloc(sizeof(char*)*(argc+1));
     server.exec_argv[argc] = NULL;
-    for (j = 0; j < argc; j++) server.exec_argv[j] = zstrdup(argv[j]);
+    for (j = 0; j < argc; j++) {
+        server.exec_argv[j] = zstrdup(argv[j]);
+    }
 
     /* We need to init sentinel right now as parsing the configuration file
      * in sentinel mode will have the effect of populating the sentinel
-     * data structures with master nodes to monitor. */
+     * data structures with master nodes to monitor.
+     *
+     *  如果开启了哨兵机制，初始化配置
+     */
     if (server.sentinel_mode) {
         initSentinelConfig();
         initSentinel();
@@ -4892,10 +5012,19 @@ int main(int argc, char **argv) {
 
     server.supervised = redisIsSupervised(server.supervised_mode);
     int background = server.daemonize && !server.supervised;
-    if (background) daemonize();
 
+
+    //创建守护进程
+    if (background) {
+        daemonize();
+    }
+
+    // 创建并初始化服务器数据结构
     initServer();
-    if (background || server.pidfile) createPidFile();
+    //如果是守护进程，创建PID 文件
+    if (background || server.pidfile) {
+        createPidFile();
+    }
     redisSetProcTitle(argv[0]);
     redisAsciiArt();
     checkTcpBacklogSettings();

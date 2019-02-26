@@ -36,7 +36,12 @@
 #ifndef __ADLIST_H__
 #define __ADLIST_H__
 
-/* Node, List, and Iterator are the only data structures used currently. */
+/* Node, List, and Iterator are the only data structures used currently.
+ *
+ * 双链表
+ *
+ */
+
 
 typedef struct listNode {
     struct listNode *prev;  //前驱指针
@@ -44,6 +49,9 @@ typedef struct listNode {
     void *value;   //万能指针，能够存放任何信息
 } listNode;
 
+/**
+ * 双链表迭代器
+ */
 typedef struct listIter {
     listNode *next;
     int direction;
@@ -54,11 +62,18 @@ typedef struct listIter {
  * 链表定义
  */
 typedef struct list {
-    listNode *head;   //链表头结点
-    listNode *tail;   //链表尾节点
-    void *(*dup)(void *ptr);    //复制链表节点保存的值
-    void (*free)(void *ptr);   //释放链表节点保存的值
-    int (*match)(void *ptr, void *key); //比较链表节点所保存的节点值和另一个输入的值是否相等
+    //链表头结点
+    listNode *head;
+
+    //链表尾节点
+    listNode *tail;
+
+    //复制链表节点保存的值
+    void *(*dup)(void *ptr);
+    //释放链表节点保存的值
+    void (*free)(void *ptr);
+    //比较链表节点所保存的节点值和另一个输入的值是否相等
+    int (*match)(void *ptr, void *key);
     unsigned long len; //链表长度计数器
 } list;
 

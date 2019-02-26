@@ -49,17 +49,30 @@
 #undef ip_len
 #endif
 
+/**
+ * Redis在anet.h和anet.c中封装了底层套接字实现
+ * anetTcpServer，建立网络套接字服务器，完成对socket(),bind(),listen()等操作的封装，返回socket的fd
+ * @param err
+ * @param addr
+ * @param port
+ * @return
+ */
+
 int anetTcpConnect(char *err, char *addr, int port);
+
 int anetTcpNonBlockConnect(char *err, char *addr, int port);
 int anetTcpNonBlockBindConnect(char *err, char *addr, int port, char *source_addr);
 int anetTcpNonBlockBestEffortBindConnect(char *err, char *addr, int port, char *source_addr);
+
 int anetUnixConnect(char *err, char *path);
 int anetUnixNonBlockConnect(char *err, char *path);
 int anetRead(int fd, char *buf, int count);
 int anetResolve(char *err, char *host, char *ipbuf, size_t ipbuf_len);
 int anetResolveIP(char *err, char *host, char *ipbuf, size_t ipbuf_len);
+
 int anetTcpServer(char *err, int port, char *bindaddr, int backlog);
 int anetTcp6Server(char *err, int port, char *bindaddr, int backlog);
+
 int anetUnixServer(char *err, char *path, mode_t perm, int backlog);
 int anetTcpAccept(char *err, int serversock, char *ip, size_t ip_len, int *port);
 int anetUnixAccept(char *err, int serversock);

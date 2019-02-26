@@ -55,29 +55,87 @@ typedef struct dictEntry {
     struct dictEntry *next;
 } dictEntry;
 
+/**
+ * 定义了字典操作的公共方法
+ */
 typedef struct dictType {
+    /**
+     * hash方法，根据关键字计算哈希值
+     * @param key
+     * @return
+     */
     uint64_t (*hashFunction)(const void *key);
+
+    /**
+     * 复制key
+     * @param privdata
+     * @param key
+     * @return
+     */
     void *(*keyDup)(void *privdata, const void *key);
+
+    /**
+     * 复制value
+     * @param privdata
+     * @param obj
+     * @return
+     */
     void *(*valDup)(void *privdata, const void *obj);
+    /**
+     * 关键字比较方法
+     * @param privdata
+     * @param key1
+     * @param key2
+     * @return
+     */
     int (*keyCompare)(void *privdata, const void *key1, const void *key2);
+
+    /**
+     * 销毁key
+     * @param privdata
+     * @param key
+     */
     void (*keyDestructor)(void *privdata, void *key);
+
+    /**
+     * 销毁value
+     * @param privdata
+     * @param obj
+     */
     void (*valDestructor)(void *privdata, void *obj);
 } dictType;
 
 /* This is our hash table structure. Every dictionary has two of this as we
- * implement incremental rehashing, for the old to the new table. */
+ * implement incremental rehashing, for the old to the new table.
+ *
+ * 哈希表结构
+ * */
 typedef struct dictht {
+    // 散列数组
     dictEntry **table;
+    //数组长度
     unsigned long size;
+    // sizemask等于size减1
     unsigned long sizemask;
+
+    // 散列数组中已经被使用的节点数量
     unsigned long used;
 } dictht;
 
 typedef struct dict {
+    // 字典类型
     dictType *type;
+
+    // 私有数据
     void *privdata;
+
+    // 一个字典中有两个哈希表
     dictht ht[2];
+
+    // 数据动态迁移的下标位置
     long rehashidx; /* rehashing not in progress if rehashidx == -1 */
+
+    // 当前正在使用的迭代器的数量
     unsigned long iterators; /* number of iterators currently running */
 } dict;
 

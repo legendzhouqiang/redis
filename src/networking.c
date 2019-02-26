@@ -130,8 +130,14 @@ client *createClient(int fd) {
     if (fd != -1) {
         anetNonBlock(NULL,fd);
         anetEnableTcpNoDelay(NULL,fd);
-        if (server.tcpkeepalive)
+
+        if (server.tcpkeepalive){
             anetKeepAlive(NULL,fd,server.tcpkeepalive);
+        }
+
+        /**
+         *  创建文件事件处理客户端发过的数据
+         */
         if (aeCreateFileEvent(server.el,fd,AE_READABLE,
             readQueryFromClient, c) == AE_ERR)
         {
@@ -897,6 +903,17 @@ int clientHasPendingReplies(client *c) {
     return c->bufpos || listLength(c->reply);
 }
 
+
+
+
+
+
+/**
+ *
+ *
+ * 接受客户端连接处理器
+ *
+ */
 #define MAX_ACCEPTS_PER_CALL 1000
 static void acceptCommonHandler(int fd, int flags, char *ip) {
     client *c;
@@ -976,7 +993,7 @@ static void acceptCommonHandler(int fd, int flags, char *ip) {
  *
  * 创建tcp连接处理程序
  *
- * @param el
+ * @param el   事件循环
  * @param fd
  * @param privdata
  * @param mask
@@ -989,6 +1006,9 @@ void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
     UNUSED(privdata);
 
     while(max--) {
+        /**
+         * 接受客户端连接
+         */
         cfd = anetTcpAccept(server.neterr, fd, cip, sizeof(cip), &cport);
         if (cfd == ANET_ERR) {
             if (errno != EWOULDBLOCK)
@@ -1872,7 +1892,10 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
      * processing the buffer, to understand how much of the replication stream
      * was actually applied to the master state: this quantity, and its
      * corresponding part of the replication stream, will be propagated to
-     * the sub-slaves and to the replication backlog. */
+     * the sub-slaves and to the replication backlog.
+     *
+     *
+     */
     processInputBufferAndReplicate(c);
 }
 

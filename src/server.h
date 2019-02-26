@@ -625,13 +625,68 @@ typedef struct RedisModuleDigest {
 #define LRU_CLOCK_RESOLUTION 1000 /* LRU clock resolution in ms */
 
 #define OBJ_SHARED_REFCOUNT INT_MAX
+
+/**
+ * Redis 存储的 value 数据都是用 redisObject 来封装的
+ * 包括 string，hash，list，set，zset  在内的所有数据类型
+ */
 typedef struct redisObject {
+    /**
+     * 表示当前对象使用的数据类型，
+     * Redis主要支持5种数据类型:string,hash,list,set,zset。
+     * 可以使用type {key}命令查看对象所属类型，
+     * type命令返回的是值对象类型，键都是string类型。
+     *
+     * REDIS_STRING   // 字符串
+     * REDIS_LIST  // 链表REDIS_SET  // 集合
+     * REDIS_ZSET  // 有序集合
+     * REDIS_HASH  // HASH结构（注意，此处不同于传统意义上的哈希表（如stl::hash_map），这里的hash仅有字段散列的语义）
+     * REDIS_VMPOINTER  // VM指针（表示数据处于VM管理之下）
+     */
     unsigned type:4;
+    /**
+     * 表示Redis内部编码类型，encoding在Redis内部使用，
+     * 代表当前对象内部采用哪种数据结构实现。
+     * 理解Redis内部编码方式对于优化内存非常重要 ，
+     * 同一个对象采用不同的编码实现内存占用存在明显差异，
+     * 具体细节见之后编码优化部分。
+     *
+     * REDIS_ENCODING_RAW  // 原始编码，就是一个原始字符串
+     * REDIS_ENCODING_INT  // INT型编码，会将数字类型的字符串编码成该格式
+     * REDIS_ENCODING_HT  // 哈希表编码，源代码中以dict结构来管理
+     * REDIS_ENCODING_ZIPMAP  // 精简编码的hash结构，更省内存
+     * REDIS_ENCODING_LINKEDLIST  // 双向链表
+     * REDIS_ENCODING_ZIPLIST  // 精简编码的链表，更省内存
+     * REDIS_ENCODING_INTSET  // 精简编码的集合，更省内存
+     * REDIS_ENCODING_SKIPLIST  //
+     *
+     */
     unsigned encoding:4;
+    /**
+     * 记录对象最后一次被访问的时间，当配置了
+     * maxmemory 和 maxmemory-policy=volatile-lru | allkeys-lru 时，
+     * 用于辅助LRU算法删除键数据。
+     * 可以使用 object idletime {key} 命令在不更新 lru 字段情况下查看当前键的空闲时间。
+     */
     unsigned lru:LRU_BITS; /* LRU time (relative to global lru_clock) or
                             * LFU data (least significant 8 bits frequency
-                            * and most significant 16 bits access time). */
+                            * and most significant 16 bits access time).
+                            */
+
+    /**
+     * 记录当前对象被引用的次数，用于通过引用次数回收内存，
+     * 当refcount=0时，可以安全回收当前对象空间。
+     * 使用 object refcount {key} 获取当前对象引用。
+     */
     int refcount;
+    /**
+     * 与对象的数据内容相关，如果是整数直接存储数据，否则表示指向数据的指针。
+     * Redis在3.0 之后对值对象是字符串且长度 <=39 字节的数据，
+     * 内部编码为 embstr 类型，字符串 sds 和 redisObject 一起分配，
+     * 从而只要一次内存操作。
+     * todo: 因此在高并发的场景尽量是我们的字符串保持 39 字节内，
+     * 减少创建redisObject内存分配次数从而提高性能。
+     */
     void *ptr;
 } robj;
 
@@ -850,6 +905,9 @@ struct moduleLoadQueueEntry {
     robj **argv;
 };
 
+/**
+ * 全局的共享对象 shared
+ */
 struct sharedObjectsStruct {
     robj *crlf, *ok, *err, *emptybulk, *czero, *cone, *pong, *space,
     *colon, *queued, *null[4], *nullarray[4],
@@ -997,6 +1055,9 @@ struct clusterState;
 #define CHILD_INFO_TYPE_RDB 0
 #define CHILD_INFO_TYPE_AOF 1
 
+/**
+ * redis server结构体
+ */
 struct redisServer {
     /* General */
     pid_t pid;                  /* Main process pid. */
@@ -1011,7 +1072,7 @@ struct redisServer {
     redisDb *db;
     dict *commands;             /* Command table */
     dict *orig_commands;        /* Command table before command renaming. */
-    aeEventLoop *el;
+    aeEventLoop *el;            /* event loop  */
     unsigned int lruclock;      /* Clock for LRU eviction */
     int shutdown_asap;          /* SHUTDOWN needed ASAP */
     int activerehashing;        /* Incremental rehash in serverCron() */
@@ -1059,7 +1120,11 @@ struct redisServer {
     off_t loading_loaded_bytes;
     time_t loading_start_time;
     off_t loading_process_events_interval_bytes;
-    /* Fast pointers to often looked up command */
+    /*
+     *
+     * Fast pointers to often looked up command
+     *
+     * */
     struct redisCommand *delCommand, *multiCommand, *lpushCommand,
                         *lpopCommand, *rpopCommand, *zpopminCommand,
                         *zpopmaxCommand, *sremCommand, *execCommand,
@@ -1104,6 +1169,8 @@ struct redisServer {
         long long samples[STATS_METRIC_SAMPLES];
         int idx;
     } inst_metric[STATS_METRIC_COUNT];
+
+
     /* Configuration */
     int verbosity;                  /* Loglevel in redis.conf */
     int maxidletime;                /* Client timeout in seconds */
@@ -1149,6 +1216,7 @@ struct redisServer {
     int aof_last_write_errno;       /* Valid if aof_last_write_status is ERR */
     int aof_load_truncated;         /* Don't stop on unexpected AOF EOF. */
     int aof_use_rdb_preamble;       /* Use RDB preamble on AOF rewrites. */
+
     /* AOF pipes used to communicate between parent and child during rewrite. */
     int aof_pipe_write_data_to_child;
     int aof_pipe_read_data_from_parent;
