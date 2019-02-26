@@ -444,3 +444,7 @@ cover everything. We want to just help you with the first steps.
 Eventually you'll find your way inside the Redis code base :-)
 
 Enjoy!
+
+###架构分析
+dict,dictType,dictht关系
+![dict,dictType,dictht](https://img-blog.csdn.net/20160330183625367)
