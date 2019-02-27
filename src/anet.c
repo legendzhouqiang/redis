@@ -637,7 +637,7 @@ static int anetGenericAccept(char *err, int s, struct sockaddr *sa, socklen_t *l
 /**
  * 接口客户端连接
  * @param err
- * @param s
+ * @param s  serverSocket
  * @param ip
  * @param ip_len
  * @param port
@@ -663,6 +663,12 @@ int anetTcpAccept(char *err, int s, char *ip, size_t ip_len, int *port) {
     return fd;
 }
 
+/**
+ * unix域socket接受client连接
+ * @param err
+ * @param s
+ * @return
+ */
 int anetUnixAccept(char *err, int s) {
     int fd;
     struct sockaddr_un sa;
@@ -725,6 +731,7 @@ int anetFormatPeer(int fd, char *buf, size_t buf_len) {
     anetPeerToString(fd,ip,sizeof(ip),&port);
     return anetFormatAddr(buf, buf_len, ip, port);
 }
+
 
 int anetSockName(int fd, char *ip, size_t ip_len, int *port) {
     struct sockaddr_storage sa;

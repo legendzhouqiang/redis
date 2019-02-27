@@ -44,14 +44,27 @@
 /* Unused arguments generate annoying warnings... */
 #define DICT_NOTUSED(V) ((void) V)
 
+
+/**
+ * 保存键值（key - value）对的结构体
+ */
 typedef struct dictEntry {
+    /**
+     * 关键字key定义
+     */
     void *key;
+    /**
+     *  值value定义，只能存放一个被选中的成员
+     */
     union {
         void *val;
         uint64_t u64;
         int64_t s64;
         double d;
     } v;
+    /**
+     * 指向下一个key-value的指针
+     */
     struct dictEntry *next;
 } dictEntry;
 

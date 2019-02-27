@@ -494,8 +494,15 @@ void initSentinel(void) {
     memset(sentinel.myid,0,sizeof(sentinel.myid));
 }
 
-/* This function gets called when the server is in Sentinel mode, started,
- * loaded the configuration, and is ready for normal operations. */
+/*
+ * This function gets called when the server is in Sentinel mode, started,
+ * loaded the configuration, and is ready for normal operations.
+ *
+ * redis 运行在sentinel 模式
+ *
+ *Sentinel(哨兵)进程是用于监控redis集群中Master主服务器工作的状态，
+ * 在Master主服务器发生故障的时候，可以实现Master和Slave服务器的切换，保证系统的高可用
+ */
 void sentinelIsRunning(void) {
     int j;
 

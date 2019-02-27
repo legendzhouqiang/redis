@@ -1255,7 +1255,9 @@ uint64_t dictEncObjHash(const void *key) {
     }
 }
 
-/* Generic hash table type where keys are Redis Objects, Values
+/*
+ *
+ * Generic hash table type where keys are Redis Objects, Values
  * dummy pointers.
  *
  */
@@ -1499,10 +1501,13 @@ long long getInstantaneousMetric(int metric) {
     return sum / STATS_METRIC_SAMPLES;
 }
 
-/* Check for timeouts. Returns non-zero if the client was terminated.
+/*
+ * Check for timeouts. Returns non-zero if the client was terminated.
  * The function gets the current time in milliseconds as argument since
  * it gets called multiple times in a loop, so calling gettimeofday() for
- * each iteration would be costly without any actual gain. */
+ * each iteration would be costly without any actual gain.
+ *
+ */
 int clientsCronHandleTimeout(client *c, mstime_t now_ms) {
     time_t now = now_ms/1000;
 
@@ -1535,10 +1540,14 @@ int clientsCronHandleTimeout(client *c, mstime_t now_ms) {
     return 0;
 }
 
-/* The client query buffer is an sds.c string that can end with a lot of
+/*
+ *
+ * The client query buffer is an sds.c string that can end with a lot of
  * free space not used, this function reclaims space if needed.
  *
- * The function always returns 0 as it never terminates the client. */
+ * The function always returns 0 as it never terminates the client.
+ *
+ */
 int clientsCronResizeQueryBuffer(client *c) {
     size_t querybuf_size = sdsAllocSize(c->querybuf);
     time_t idletime = server.unixtime - c->lastinteraction;
@@ -1685,9 +1694,15 @@ void clientsCron(void) {
     }
 }
 
-/* This function handles 'background' operations we are required to do
+/*
+ *
+ *
+ * This function handles 'background' operations we are required to do
  * incrementally in Redis databases, such as active key expiring, resizing,
- * rehashing. */
+ * rehashing.
+ *
+ *
+ * */
 void databasesCron(void) {
     /* Expire keys by random sampling. Not required for slaves
      * as master will synthesize DELs for us. */
@@ -1740,10 +1755,14 @@ void databasesCron(void) {
     }
 }
 
-/* We take a cached value of the unix time in the global state because with
+/*
+ *
+ * We take a cached value of the unix time in the global state because with
  * virtual memory and aging there is to store the current time in objects at
  * every object access, and accuracy is not needed. To access a global var is
- * a lot faster than calling time(NULL) */
+ * a lot faster than calling time(NULL)
+ *
+ * */
 void updateCachedTime(void) {
     time_t unixtime = time(NULL);
     atomicSet(server.unixtime,unixtime);
@@ -1752,7 +1771,9 @@ void updateCachedTime(void) {
     /* To get information about daylight saving time, we need to call localtime_r
      * and cache the result. However calling localtime_r in this context is safe
      * since we will never fork() while here, in the main thread. The logging
-     * function will call a thread safe version of localtime that has no locks. */
+     * function will call a thread safe version of localtime that has no locks.
+     *
+     */
     struct tm tm;
     localtime_r(&server.unixtime,&tm);
     server.daylight_active = tm.tm_isdst;
@@ -2108,7 +2129,12 @@ void afterSleep(struct aeEventLoop *eventLoop) {
     if (moduleCount()) moduleAcquireGIL();
 }
 
-/* =========================== Server initialization ======================== */
+/* =========================== Server initialization ========================
+ *
+ *
+ * 创建共享对象
+ *
+ */
 
 void createSharedObjects(void) {
     int j;
@@ -2440,7 +2466,11 @@ extern char **environ;
  * RESTART_SERVER_CONFIG_REWRITE    Rewrite the config file before restarting.
  *
  * On success the function does not return, because the process turns into
- * a different process. On error C_ERR is returned. */
+ * a different process. On error C_ERR is returned.
+ *
+ * 重启server
+ *
+ */
 int restartServer(int flags, mstime_t delay) {
     int j;
 
@@ -2574,7 +2604,8 @@ void adjustOpenFilesLimit(void) {
 }
 
 /* Check that server.tcp_backlog can be actually enforced in Linux according
- * to the value of /proc/sys/net/core/somaxconn, or warn about it. */
+ * to the value of /proc/sys/net/core/somaxconn, or warn about it.
+ * */
 void checkTcpBacklogSettings(void) {
 #ifdef HAVE_PROC_SOMAXCONN
     FILE *fp = fopen("/proc/sys/net/core/somaxconn","r");
@@ -2607,7 +2638,12 @@ void checkTcpBacklogSettings(void) {
  * error, at least one of the server.bindaddr addresses was
  * impossible to bind, or no bind addresses were specified in the server
  * configuration but the function is not able to bind * for at least
- * one of the IPv4 or IPv6 protocols. */
+ * one of the IPv4 or IPv6 protocols.
+ *
+ *
+ *  创建TcpServer绑定地址，并在固定端口监听客户端连接
+ *
+ */
 int listenToPort(int port, int *fds, int *count) {
     int j;
 
@@ -2713,6 +2749,11 @@ void resetServerStats(void) {
     server.aof_delayed_fsync = 0;
 }
 
+
+
+/**
+ * redis tcpServer初始化
+ */
 void initServer(void) {
     int j;
 
@@ -2771,8 +2812,7 @@ void initServer(void) {
     server.db = zmalloc(sizeof(redisDb)*server.dbnum);
 
     /*
-     * Open the TCP listening socket for the user commands.
-     *
+     * 创建tcpServer 并在端口监听
      */
     if (server.port != 0 &&
         listenToPort(server.port,server.ipfd,&server.ipfd_count) == C_ERR)
@@ -3574,7 +3614,11 @@ int processCommand(client *c) {
 /*================================== Shutdown =============================== */
 
 /* Close listening sockets. Also unlink the unix domain socket if
- * unlink_unix_socket is non-zero. */
+ * unlink_unix_socket is non-zero.
+ *
+ *  关闭unix语言siocket监听
+ *
+  */
 void closeListeningSockets(int unlink_unix_socket) {
     int j;
 
@@ -3687,11 +3731,16 @@ int writeCommandsDeniedByDiskError(void) {
     }
 }
 
-/* AUTH <passowrd>
+/*
+ *
+ * AUTH <passowrd>
  * AUTH <username> <password> (Redis >= 6.0 form)
  *
  * When the user is omitted it means that we are trying to authenticate
- * against the default user. */
+ * against the default user.
+ *
+ *
+ */
 void authCommand(client *c) {
     /* Only two or three argument forms are allowed. */
     if (c->argc > 3) {
@@ -3732,8 +3781,12 @@ void authCommand(client *c) {
     if (c->argc == 2) decrRefCount(username);
 }
 
-/* The PING command. It works in a different way if the client is in
- * in Pub/Sub mode. */
+/**
+ *
+ * The PING command. It works in a different way if the client is in
+ * in Pub/Sub mode
+ * @param c
+ */
 void pingCommand(client *c) {
     /* The command takes zero or one arguments. */
     if (c->argc > 2) {
@@ -3757,6 +3810,11 @@ void pingCommand(client *c) {
     }
 }
 
+
+/**
+ * echo命令
+ * @param c
+ */
 void echoCommand(client *c) {
     addReplyBulk(c,c->argv[1]);
 }
@@ -3879,8 +3937,11 @@ NULL
     }
 }
 
-/* Convert an amount of bytes into a human readable string in the form
- * of 100B, 2G, 100M, 4K, and so forth. */
+/*
+ * Convert an amount of bytes into a human readable string in the form
+ * of 100B, 2G, 100M, 4K, and so forth.
+ *
+ */
 void bytesToHuman(char *s, unsigned long long n) {
     double d;
 
@@ -3908,9 +3969,14 @@ void bytesToHuman(char *s, unsigned long long n) {
     }
 }
 
-/* Create the string returned by the INFO command. This is decoupled
+/*
+ *
+ * Create the string returned by the INFO command. This is decoupled
  * by the INFO command itself as we need to report the same information
- * on memory corruption problems. */
+ * on memory corruption problems.
+ *
+ *
+ */
 sds genRedisInfoString(char *section) {
     sds info = sdsempty();
     time_t uptime = server.unixtime-server.stat_starttime;
@@ -4614,6 +4680,10 @@ void redisAsciiArt(void) {
     zfree(buf);
 }
 
+/**
+ * 进程终止信号处理器
+ * @param sig
+ */
 static void sigShutdownHandler(int sig) {
     char *msg;
 
@@ -4644,6 +4714,12 @@ static void sigShutdownHandler(int sig) {
     server.shutdown_asap = 1;
 }
 
+
+/**
+ * 启动信号处理机制
+ *
+ * SIGINT,SIGTERM进程终止信号
+ */
 void setupSignalHandlers(void) {
     struct sigaction act;
 
@@ -4721,6 +4797,10 @@ void loadDataFromDisk(void) {
     }
 }
 
+/**
+ * 内存溢出处理函数
+ * @param allocation_size
+ */
 void redisOutOfMemoryHandler(size_t allocation_size) {
     serverLog(LL_WARNING,"Out Of Memory allocating %zu bytes!",
         allocation_size);
@@ -4730,8 +4810,12 @@ void redisOutOfMemoryHandler(size_t allocation_size) {
 void redisSetProcTitle(char *title) {
 #ifdef USE_SETPROCTITLE
     char *server_mode = "";
-    if (server.cluster_enabled) server_mode = " [cluster]";
-    else if (server.sentinel_mode) server_mode = " [sentinel]";
+    if (server.cluster_enabled) {
+        server_mode = " [cluster]";
+    }
+    else if (server.sentinel_mode) {
+        server_mode = " [sentinel]";
+    }
 
     setproctitle("%s %s:%d%s",
         title,
@@ -4897,12 +4981,20 @@ int main(int argc, char **argv) {
     //初始化server配置
     initServerConfig();
 
-    ACLInit(); /* The ACL subsystem must be initialized ASAP because the
-                  basic networking code and client creation depends on it. */
+
+    /*
+     * The ACL subsystem must be initialized ASAP because the
+     * basic networking code and client creation depends on it.
+     *
+     */
+    ACLInit();
     moduleInitModulesSystem();
 
-    /* Store the executable path and arguments in a safe place in order
-     * to be able to restart the server later. */
+    /*
+     * Store the executable path and arguments in a safe place in order
+     * to be able to restart the server later.
+     *
+     */
     server.executable = getAbsolutePath(argv[0]);
     server.exec_argv = zmalloc(sizeof(char*)*(argc+1));
     server.exec_argv[argc] = NULL;
@@ -4921,9 +5013,13 @@ int main(int argc, char **argv) {
         initSentinel();
     }
 
-    /* Check if we need to start in redis-check-rdb/aof mode. We just execute
+    /*
+     *
+     * Check if we need to start in redis-check-rdb/aof mode. We just execute
      * the program main. However the program is part of the Redis executable
-     * so that we can easily execute an RDB check on loading errors. */
+     * so that we can easily execute an RDB check on loading errors.
+     *
+     */
     if (strstr(argv[0],"redis-check-rdb") != NULL)
         redis_check_rdb_main(argc,argv,NULL);
     else if (strstr(argv[0],"redis-check-aof") != NULL)
@@ -4995,6 +5091,7 @@ int main(int argc, char **argv) {
         sdsfree(options);
     }
 
+    //打印日志
     serverLog(LL_WARNING, "oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo");
     serverLog(LL_WARNING,
         "Redis version=%s, bits=%d, commit=%s, modified=%d, pid=%d, just started",
@@ -5021,6 +5118,7 @@ int main(int argc, char **argv) {
 
     // 创建并初始化服务器数据结构
     initServer();
+
     //如果是守护进程，创建PID 文件
     if (background || server.pidfile) {
         createPidFile();
@@ -5029,6 +5127,7 @@ int main(int argc, char **argv) {
     redisAsciiArt();
     checkTcpBacklogSettings();
 
+    //根据配置是否启用sentinel模式
     if (!server.sentinel_mode) {
         /* Things not needed when running in Sentinel mode. */
         serverLog(LL_WARNING,"Server initialized");
@@ -5036,6 +5135,7 @@ int main(int argc, char **argv) {
         linuxMemoryWarnings();
     #endif
         moduleLoadFromQueue();
+        //从磁盘载入数据
         loadDataFromDisk();
         if (server.cluster_enabled) {
             if (verifyClusterConfigWithData() == C_ERR) {
@@ -5053,13 +5153,16 @@ int main(int argc, char **argv) {
         sentinelIsRunning();
     }
 
-    /* Warning the user about suspicious maxmemory setting. */
+    /*
+     * redis内存过小进行报警
+     *
+     */
     if (server.maxmemory > 0 && server.maxmemory < 1024*1024) {
         serverLog(LL_WARNING,"WARNING: You specified a maxmemory value that is less than 1MB (current value is %llu bytes). Are you sure this is what you really want?", server.maxmemory);
     }
-
     aeSetBeforeSleepProc(server.el,beforeSleep);
     aeSetAfterSleepProc(server.el,afterSleep);
+    //启用时间轮训机制，进行事件轮训
     aeMain(server.el);
     aeDeleteEventLoop(server.el);
     return 0;

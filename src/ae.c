@@ -131,7 +131,7 @@ int aeResizeSetSize(aeEventLoop *eventLoop, int setsize) {
 }
 
 /**
- * s删除事件循环中的事件
+ * 删除事件循环中的事件
  * @param eventLoop
  */
 void aeDeleteEventLoop(aeEventLoop *eventLoop) {
@@ -588,8 +588,9 @@ int aeWait(int fd, int mask, long long milliseconds) {
 void aeMain(aeEventLoop *eventLoop) {
     eventLoop->stop = 0;
     while (!eventLoop->stop) {
-        if (eventLoop->beforesleep != NULL)
+        if (eventLoop->beforesleep != NULL){
             eventLoop->beforesleep(eventLoop);
+        }
         aeProcessEvents(eventLoop, AE_ALL_EVENTS|AE_CALL_AFTER_SLEEP);
     }
 }
